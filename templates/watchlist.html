@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Watchlist - CineTrack</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .star-rating {
+            font-size: 1.5rem;
+            color: #ddd;
+            cursor: pointer;
+        }
+        .star-rating .star.filled {
+            color: #ffc107;
+        }
+        .rating-badge {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: #ffc107;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-weight: bold;
+            z-index: 10;
+        }
+        .personal-rating-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: rgba(25, 135, 84, 0.9);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-weight: bold;
+            z-index: 10;
+        }
+        .card-img-top {
+            cursor: pointer;
+        }
+        .toast-container {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            z-index: 9999;
+        }
+    </style>
+</head>
+<body class="bg-light">
+
+    <!-- Toast Container for notifications -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <div class="container py-5">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>📋 My Watchlist</h1>
+            <div>
+                <span class="me-3">Hello, <strong>{{ current_user.username }}</strong>!</span>
+                <a href="/stats" class="btn btn-outline-info me-2">📊 Statistics</a>
+                <a href="/" class="btn btn-outline-primary me-2">← Back to Search</a>
+                <a href="/logout" class="btn btn-outline-danger">Logout</a>
+            </div>
+        </div>
+
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- Statistics Summary -->
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h5 class="card-title">Total Movies</h5>
+                        <h2 class="text-primary" id="totalMovies">{{ total_movies }}</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h5 class="card-title">Watched</h5>
+                        <h2 class="text-success" id="watchedCount">{{ watched_count }}</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h5 class="card-title">To Watch</h5>
+                        <h2 class="text-warning" id="unwatchedCount">{{ unwatched_count }}</h2>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Search Bar -->
+        <form action="/watchlist" method="get" class="mb-4">
+            <div class="input-group">
+                <input type="text" name="q" class="form-control" placeholder="Search your watchlist..." value="{{ search_query if search_query else '' }}">
+                <button class="btn btn-primary" type="submit">Search</button>
+                {% if search_query %}
+                    <a href="/watchlist" class="btn btn-outline-secondary">Clear</a>
+                {% endif %}
+            </div>
+            <!-- Preserve filters when searching -->
+            {% if selected_genre %}
+                <input type="hidden" name="genre" value="{{ selected_genre }}">
+            {% endif %}
+            {% if selected_status %}
+                <input type="hidden" name="status" value="{{ selected_status }}">
+            {% endif %}
+            {% if selected_sort %}
+                <input type="hidden" name="sort" value="{{ selected_sort }}">
+            {% endif %}
+        </form>
+
+        <!-- Filters and Sort -->
+        <form action="/watchlist" method="get" class="row mb-4">
+            <div class="col-md-3">
+                <select name="genre" class="form-select">
+                    <option value="">All Genres</option>
+                    {% for genre in all_genres %}
+                        <option value="{{ genre }}" {% if selected_genre == genre %}selected{% endif %}>{{ genre }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <select name="status" class="form-select">
+                    <option value="">All Movies</option>
+                    <option value="watched" {% if selected_status == 'watched' %}selected{% endif %}>Watched</option>
+                    <option value="unwatched" {% if selected_status == 'unwatched' %}selected{% endif %}>Not Watched</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <select name="sort" class="form-select">
+                    <option value="date_added_desc" {% if selected_sort == 'date_added_desc' %}selected{% endif %}>Date Added (Newest)</option>
+                    <option value="date_added_asc" {% if selected_sort == 'date_added_asc' %}selected{% endif %}>Date Added (Oldest)</option>
+                    <option value="title_asc" {% if selected_sort == 'title_asc' %}selected{% endif %}>Title (A-Z)</option>
+                    <option value="title_desc" {% if selected_sort == 'title_desc' %}selected{% endif %}>Title (Z-A)</option>
+                    <option value="year_desc" {% if selected_sort == 'year_desc' %}selected{% endif %}>Year (Newest)</option>
+                    <option value="year_asc" {% if selected_sort == 'year_asc' %}selected{% endif %}>Year (Oldest)</option>
+                    <option value="rating_desc" {% if selected_sort == 'rating_desc' %}selected{% endif %}>My Rating (High-Low)</option>
+                    <option value="rating_asc" {% if selected_sort == 'rating_asc' %}selected{% endif %}>My Rating (Low-High)</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary w-100">Apply</button>
+            </div>
+            <!-- Preserve search query when filtering -->
+            {% if search_query %}
+                <input type="hidden" name="q" value="{{ search_query }}">
+            {% endif %}
+        </form>
+
+        <div class="row">
+            {% for movie in watchlist %}
+                <div class="col-md-3 mb-4">
+                    <div class="card h-100 shadow-sm {% if movie.watched %}border-success{% endif %}" id="movie-card-{{ movie.tmdb_id }}">
+                        <div class="watched-badge-{{ movie.tmdb_id }}">
+                            {% if movie.watched %}
+                                <div class="position-absolute top-0 start-0 m-2 bg-success text-white px-2 py-1 rounded" style="z-index: 10;">
+                                    ✓ Watched
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="position-relative">
+                            {% if movie.vote_average %}
+                                <span class="rating-badge">⭐ {{ movie.vote_average|round(1) }}</span>
+                            {% endif %}
+                            <span class="personal-rating-badge-{{ movie.tmdb_id }}">
+                                {% if movie.personal_rating %}
+                                    My: {{ movie.personal_rating }}★
+                                {% endif %}
+                            </span>
+                            <a href="/movie/{{ movie.tmdb_id }}">
+                                {% if movie.poster_path %}
+                                    <img src="{{ image_base }}{{ movie.poster_path }}" class="card-img-top" alt="{{ movie.title }}">
+                                {% else %}
+                                    <img src="https://via.placeholder.com/500x750?text=No+Poster" class="card-img-top" alt="No Poster">
+                                {% endif %}
+                            </a>
+                        </div>
+                        
+                        <div class="card-body">
+                            <h5 class="card-title">{{ movie.title }}</h5>
+                            <p class="card-text text-muted small">{{ movie.release_date[:4] if movie.release_date else 'N/A' }}</p>
+                            
+                            {% if movie.genres %}
+                                <p class="card-text small"><strong>Genres:</strong> {{ movie.genres }}</p>
+                            {% endif %}
+
+                            <!-- Personal Rating -->
+                            <div class="mb-2">
+                                <small class="text-muted">Your Rating:</small>
+                                <div class="star-rating d-inline" data-movie-id="{{ movie.tmdb_id }}" data-current-rating="{{ movie.personal_rating if movie.personal_rating else 0 }}">
+                                    {% for i in range(1, 6) %}
+                                        <span class="star {% if movie.personal_rating and i <= movie.personal_rating %}filled{% endif %}" data-rating="{{ i }}" onclick="rateMovie('{{ movie.tmdb_id }}', '{{ i }}')">★</span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+
+                            <!-- Notes Section -->
+                            <div class="mb-2">
+                                <button class="btn btn-sm btn-outline-secondary w-100" type="button" data-bs-toggle="collapse" data-bs-target="#notes-{{ movie.tmdb_id }}">
+                                    {% if movie.notes %}✏️ Edit Notes{% else %}📝 Add Notes{% endif %}
+                                </button>
+                                <div class="collapse mt-2" id="notes-{{ movie.tmdb_id }}">
+                                    <form onsubmit="saveNotes(event, '{{ movie.tmdb_id }}', '{{ movie.title }}')">
+                                        <textarea name="notes" class="form-control form-control-sm mb-2" rows="3" placeholder="Add your notes..." id="notes-text-{{ movie.tmdb_id }}">{{ movie.notes if movie.notes else '' }}</textarea>
+                                        <button type="submit" class="btn btn-sm btn-primary w-100">Save Notes</button>
+                                    </form>
+                                </div>
+                                <small class="text-muted d-block mt-1" id="notes-preview-{{ movie.tmdb_id }}">
+                                    {% if movie.notes %}
+                                        {{ movie.notes[:50] }}{% if movie.notes|length > 50 %}...{% endif %}
+                                    {% endif %}
+                                </small>
+                            </div>
+                            
+                            <button onclick="toggleWatched('{{ movie.tmdb_id }}', '{{ movie.watched }}', '{{ movie.title }}')" 
+                                    class="btn btn-sm {% if movie.watched %}btn-outline-secondary{% else %}btn-outline-success{% endif %} w-100 mt-2 mb-2" 
+                                    id="watched-btn-{{ movie.tmdb_id }}">
+                                {% if movie.watched %}Mark as Unwatched{% else %}Mark as Watched{% endif %}
+                            </button>
+                            
+                            <form action="/watchlist/remove" method="post">
+                                <input type="hidden" name="movie_id" value="{{ movie.tmdb_id }}">
+                                <button type="submit" class="btn btn-sm btn-danger w-100" onclick="return confirm('Remove this movie from your watchlist?')">Remove</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            {% else %}
+                <div class="col-12">
+                    <div class="text-center py-5">
+                        <h3 class="text-muted">No movies found</h3>
+                        {% if selected_genre or selected_status or search_query %}
+                            <p class="text-muted">Try adjusting your filters or search</p>
+                            <a href="/watchlist" class="btn btn-primary mt-3">Clear All Filters</a>
+                        {% else %}
+                            <p class="text-muted">Start adding movies to track what you want to watch!</p>
+                            <a href="/" class="btn btn-primary mt-3">Search Movies</a>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Function to show toast notifications
+        function showToast(message, type = 'success') {
+            const toastContainer = document.getElementById('toastContainer');
+            const toastId = 'toast-' + Date.now();
+            
+            const bgColor = type === 'success' ? 'bg-success' : 'bg-info';
+            
+            const toastHTML = `
+                <div id="${toastId}" class="toast align-items-center text-white ${bgColor} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                    <div class="d-flex">
+                        <div class="toast-body">
+                            ${message}
+                        </div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                </div>
+            `;
+            
+            toastContainer.insertAdjacentHTML('beforeend', toastHTML);
+            
+            const toastElement = document.getElementById(toastId);
+            const toast = new bootstrap.Toast(toastElement, { delay: 3000 });
+            toast.show();
+            
+            // Remove toast from DOM after it's hidden
+            toastElement.addEventListener('hidden.bs.toast', function () {
+                toastElement.remove();
+            });
+        }
+
+        // Function to toggle watched status
+        function toggleWatched(movieId, currentStatus, movieTitle) {
+            fetch('/watchlist/toggle', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `movie_id=${movieId}`
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const newStatus = currentStatus === 1 ? 0 : 1;
+                    const button = document.getElementById(`watched-btn-${movieId}`);
+                    const card = document.getElementById(`movie-card-${movieId}`);
+                    const badgeContainer = document.querySelector(`.watched-badge-${movieId}`);
+                    
+                    // Update button
+                    if (newStatus === 1) {
+                        button.textContent = 'Mark as Unwatched';
+                        button.className = 'btn btn-sm btn-outline-secondary w-100 mt-2 mb-2';
+                        card.classList.add('border-success');
+                        badgeContainer.innerHTML = '<div class="position-absolute top-0 start-0 m-2 bg-success text-white px-2 py-1 rounded" style="z-index: 10;">✓ Watched</div>';
+                    } else {
+                        button.textContent = 'Mark as Watched';
+                        button.className = 'btn btn-sm btn-outline-success w-100 mt-2 mb-2';
+                        card.classList.remove('border-success');
+                        badgeContainer.innerHTML = '';
+                    }
+                    
+                    // Update onclick to reflect new status
+                    button.setAttribute('onclick', `toggleWatched('${movieId}', ${newStatus}, '${movieTitle}')`);
+                    
+                    // Update statistics
+                    updateStatistics();
+                    
+                    showToast(data.message);
+                } else {
+                    showToast('Error updating movie status', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showToast('Error updating movie status', 'error');
+            });
+        }
+
+        // Function to rate a movie
+        function rateMovie(movieId, rating, movieTitle) {
+            fetch('/watchlist/rate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `movie_id=${movieId}&rating=${rating}`
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update stars
+                    const starContainer = document.querySelector(`[data-movie-id="${movieId}"]`);
+                    const stars = starContainer.querySelectorAll('.star');
+                    stars.forEach((star, index) => {
+                        if (index < rating) {
+                            star.classList.add('filled');
+                        } else {
+                            star.classList.remove('filled');
+                        }
+                    });
+                    
+                    // Update personal rating badge
+                    const badge = document.querySelector(`.personal-rating-badge-${movieId}`);
+                    badge.textContent = `My: ${rating}★`;
+                    badge.style.display = 'inline-block';
+                    
+                    showToast(data.message);
+                } else {
+                    showToast('Error rating movie', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showToast('Error rating movie', 'error');
+            });
+        }
+
+        // Function to save notes
+        function saveNotes(event, movieId, movieTitle) {
+            event.preventDefault();
+            
+            const notes = document.getElementById(`notes-text-${movieId}`).value;
+            
+            fetch('/watchlist/notes', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `movie_id=${movieId}&notes=${encodeURIComponent(notes)}`
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update notes preview
+                    const preview = document.getElementById(`notes-preview-${movieId}`);
+                    if (notes) {
+                        const shortNotes = notes.length > 50 ? notes.substring(0, 50) + '...' : notes;
+                        preview.textContent = shortNotes;
+                    } else {
+                        preview.textContent = '';
+                    }
+                    
+                    // Close the collapse
+                    const collapseElement = document.getElementById(`notes-${movieId}`);
+                    const collapse = bootstrap.Collapse.getInstance(collapseElement);
+                    if (collapse) {
+                        collapse.hide();
+                    }
+                    
+                    showToast(data.message);
+                } else {
+                    showToast('Error saving notes', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showToast('Error saving notes', 'error');
+            });
+        }
+
+        // Function to update statistics counters
+        function updateStatistics() {
+            fetch('/watchlist/stats')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('totalMovies').textContent = data.total_movies;
+                document.getElementById('watchedCount').textContent = data.watched_count;
+                document.getElementById('unwatchedCount').textContent = data.unwatched_count;
+            })
+            .catch(error => {
+                console.error('Error updating statistics:', error);
+            });
+        }
+    </script>
+</body>
+</html>
