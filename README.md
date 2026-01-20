@@ -45,7 +45,6 @@ A web application for tracking movies you want to watch and movies you've alread
 - Your top-rated movies
 
 ### 💫 User Experience
-- Real-time updates with AJAX (no page refreshes)
 - Toast notifications for user actions
 - Responsive design with Bootstrap
 - Clean and intuitive interface
@@ -62,7 +61,8 @@ A web application for tracking movies you want to watch and movies you've alread
 ## Prerequisites
 - Python 3.7 or higher
 - pip (Python package manager)
-- ## Usage Guide
+
+## Usage Guide
 
 ### Getting Started
 1. **Register**: Create a new account with username, email, and password
@@ -95,4 +95,3 @@ Potential features for future versions:
 - Integration with streaming services
 - Advanced statistics and charts
 - Email notifications for new releases
-- Social features (follow friends, share reviews)
